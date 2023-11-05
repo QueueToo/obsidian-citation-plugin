@@ -15,13 +15,17 @@ export type DatabaseType = typeof databaseTypes[number];
 export const TEMPLATE_VARIABLES = {
   citekey: 'Unique citekey',
   abstract: '',
+  authority: 'Court name',
   authorString: 'Comma-separated list of author names',
   containerTitle:
     'Title of the container holding the reference (e.g. book title for a book chapter, or the journal title for a journal article)',
+  "container-title": 'Court reporter',
+  day: 'Decision day',
   DOI: '',
   eprint: '',
   eprinttype: '',
   eventPlace: 'Location of event',
+  month: 'Decision month',
   note: '',
   page: 'Page or page range',
   publisher: '',
@@ -29,7 +33,8 @@ export const TEMPLATE_VARIABLES = {
   title: '',
   titleShort: '',
   URL: '',
-  year: 'Publication year',
+  volume: 'Reporer volume',
+  year: 'Decision year',
   zoteroSelectURI: 'URI to open the reference in Zotero',
 };
 
@@ -39,23 +44,26 @@ export class Library {
   get size(): number {
     return Object.keys(this.entries).length;
   }
-
   /**
    * For the given citekey, find the corresponding `Entry` and return a
    * collection of template variable assignments.
    */
   getTemplateVariablesForCitekey(citekey: string): Record<string, any> {
     const entry: Entry = this.entries[citekey];
+  
     const shortcuts = {
       citekey: citekey,
 
       abstract: entry.abstract,
-      authorString: entry.authorString,
+      authority: entry.authority,
+      authorString: entry.authorString, 
       containerTitle: entry.containerTitle,
+      day: entry.day?.toString(),
       DOI: entry.DOI,
       eprint: entry.eprint,
       eprinttype: entry.eprinttype,
       eventPlace: entry.eventPlace,
+      month: entry.month.toString(),
       note: entry.note,
       page: entry.page,
       publisher: entry.publisher,
@@ -63,6 +71,7 @@ export class Library {
       title: entry.title,
       titleShort: entry.titleShort,
       URL: entry.URL,
+      volume: entry.volume,
       year: entry.year?.toString(),
       zoteroSelectURI: entry.zoteroSelectURI,
     };
@@ -134,7 +143,8 @@ export abstract class Entry {
 
   public abstract abstract?: string;
   public abstract author?: Author[];
-
+  
+  public abstract authority?: string;
   /**
    * A comma-separated list of authors, each of the format `<firstname> <lastname>`.
    */
@@ -147,6 +157,8 @@ export abstract class Entry {
    */
   public abstract containerTitle?: string;
 
+  
+
   public abstract DOI?: string;
   public abstract files?: string[];
 
@@ -158,6 +170,8 @@ export abstract class Entry {
    */
   public abstract issuedDate?: Date;
 
+
+  
   /**
    * Page or page range of the reference.
    */
@@ -177,12 +191,55 @@ export abstract class Entry {
   public abstract eprint?: string;
   public abstract eprinttype?: string;
 
-  protected _year?: string;
-  public get year(): number {
-    return this._year
-      ? parseInt(this._year)
-      : this.issuedDate?.getUTCFullYear();
+  public abstract volume?: string;
+
+
+  protected _day?: string;
+  public get day(): number {
+    return this._day
+      ? parseInt(this._day)
+      : this.issuedDate?.getUTCDate();
   }
+
+  protected _month?: string;
+  public get month(): string {
+  
+    // Array of month abbreviations
+    const monthAbbreviations = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  
+    // Get the month number
+    let monthNumber = this._month
+      ? parseInt(this._month)
+      : this.issuedDate
+      ? this.issuedDate.getUTCMonth() + 1 // getUTCMonth is zero-indexed
+      : null;
+  
+    // Return the month abbreviation or null if monthNumber is not valid
+    return monthNumber ? monthAbbreviations[monthNumber - 1] : null;
+  }
+
+  protected _year?: string;
+  public get year(): string {
+
+  
+    // Get the full year as a number
+    let fullYear = this._year
+      ? parseInt(this._year)
+      : this.issuedDate
+      ? this.issuedDate.getUTCFullYear()
+      : null;
+  
+    // Convert the full year to a string and take the last two characters
+    return fullYear ? fullYear.toString().slice(-2) : null;
+  }
+
+
+  // protected _year?: string;
+  // public get year(): number {
+  //   return this._year
+  //     ? parseInt(this._year)
+  //     : this.issuedDate?.getUTCFullYear();
+  // }
 
   protected _note?: string[];
 
@@ -224,6 +281,8 @@ export abstract class Entry {
 export type EntryData = EntryDataCSL | EntryDataBibLaTeX;
 
 export interface EntryDataCSL {
+  authority: any;
+  volume: any;
   id: string;
   type: string;
 
@@ -264,6 +323,7 @@ export class EntryCSLAdapter extends Entry {
   get author() {
     return this.data.author;
   }
+  
 
   get authorString(): string | null {
     return this.data.author
@@ -271,6 +331,10 @@ export class EntryCSLAdapter extends Entry {
       : null;
   }
 
+  get authority() {
+    return this.data.authority;
+  }
+ 
   get containerTitle() {
     return this.data['container-title'];
   }
@@ -320,12 +384,19 @@ export class EntryCSLAdapter extends Entry {
   get URL() {
     return this.data.URL;
   }
+
+  get volume() {
+    return this.data.volume;
+  }
+ 
 }
 
 const BIBLATEX_PROPERTY_MAPPING: Record<string, string> = {
   abstract: 'abstract',
+  authority: 'authority',
   booktitle: '_containerTitle',
   date: 'issued',
+  day: '_day',
   doi: 'DOI',
   eprint: 'eprint',
   eprinttype: 'eprinttype',
@@ -333,12 +404,14 @@ const BIBLATEX_PROPERTY_MAPPING: Record<string, string> = {
   journal: '_containerTitle',
   journaltitle: '_containerTitle',
   location: 'publisherPlace',
+  month: '_month',
   pages: 'page',
   shortjournal: 'containerTitleShort',
   title: 'title',
   shorttitle: 'titleShort',
   url: 'URL',
   venue: 'eventPlace',
+  volume: 'volume',
   year: '_year',
   publisher: 'publisher',
   note: '_note',
@@ -348,27 +421,32 @@ const BIBLATEX_PROPERTY_MAPPING: Record<string, string> = {
 // property entries). For the following fields, just blindly take the first.
 const BIBLATEX_PROPERTY_TAKE_FIRST: string[] = [
   'abstract',
+  'authority',
   'booktitle',
   '_containerTitle',
   'date',
+  '_day',
   'doi',
   'eprint',
   'eprinttype',
   'eventtitle',
   'journaltitle',
   'location',
+  '_month',
   'pages',
   'shortjournal',
   'title',
   'shorttitle',
   'url',
   'venue',
+  'volume',
   '_year',
   'publisher',
 ];
 
 export class EntryBibLaTeXAdapter extends Entry {
   abstract?: string;
+  authority?: string;
   _containerTitle?: string;
   containerTitleShort?: string;
   DOI?: string;
@@ -383,9 +461,13 @@ export class EntryBibLaTeXAdapter extends Entry {
   title?: string;
   titleShort?: string;
   URL?: string;
+  volume?: string;
+  _day?: string;
+  _month?: string;
   _year?: string;
   _note?: string[];
 
+    
   constructor(private data: EntryDataBibLaTeX) {
     super();
 
